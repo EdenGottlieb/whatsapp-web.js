@@ -34,7 +34,7 @@ exports.LoadUtils = () => {
                     forceDocument: options.sendMediaAsDocument,
                     forceGif: options.sendVideoAsGif
                 });
-            
+
             attOptions.caption = options.caption;
             content = options.sendMediaAsSticker ? undefined : attOptions.preview;
             attOptions.isViewOnce = options.isViewOnce;
@@ -53,8 +53,8 @@ exports.LoadUtils = () => {
             quotedMessage = quotedMessage['messages'][0];
 
             // TODO remove .canReply() once all clients are updated to >= v2.2241.6
-            const canReply = window.Store.ReplyUtils ? 
-                window.Store.ReplyUtils.canReplyMsg(quotedMessage.unsafe()) : 
+            const canReply = window.Store.ReplyUtils ?
+                window.Store.ReplyUtils.canReplyMsg(quotedMessage.unsafe()) :
                 quotedMessage.canReply();
 
             if (canReply) {
@@ -160,7 +160,7 @@ exports.LoadUtils = () => {
                 }
             }
         }
-        
+
         let buttonOptions = {};
         if(options.buttons){
             let caption;
@@ -212,7 +212,7 @@ exports.LoadUtils = () => {
 
         const meUser = window.Store.User.getMaybeMeUser();
         const newId = await window.Store.MsgKey.newId();
-        
+
         const newMsgId = new window.Store.MsgKey({
             from: meUser,
             to: chat.id,
@@ -250,7 +250,7 @@ exports.LoadUtils = () => {
             ...botOptions,
             ...extraOptions
         };
-        
+
         // Bot's won't reply if canonicalUrl is set (linking)
         if (botOptions) {
             delete message.canonicalUrl;
@@ -259,12 +259,12 @@ exports.LoadUtils = () => {
         await window.Store.SendMessage.addAndSendMsgToChat(chat, message);
         return window.Store.Msg.get(newMsgId._serialized);
     };
-	
+
     window.WWebJS.editMessage = async (msg, content, options = {}) => {
 
         const extraOptions = options.extraOptions || {};
         delete options.extraOptions;
-        
+
         if (options.mentionedJidList) {
             options.mentionedJidList = await Promise.all(
                 options.mentionedJidList.map(async (id) => {
@@ -458,10 +458,10 @@ exports.LoadUtils = () => {
         if (chat.groupMetadata) {
             res.isGroup = true;
             const chatWid = window.Store.WidFactory.createWid((chat.id._serialized));
-            await window.Store.GroupMetadata.update(chatWid);
+            await window.Store.GroupMetadata.update({id: chatWid});
             res.groupMetadata = chat.groupMetadata.serialize();
         }
-        
+
         res.lastMessage = null;
         if (res.msgs && res.msgs.length) {
             const lastMessage = chat.lastReceivedKey
@@ -471,7 +471,7 @@ exports.LoadUtils = () => {
                 res.lastMessage = window.WWebJS.getMessageModel(lastMessage);
             }
         }
-        
+
         delete res.msgs;
         delete res.msgUnsyncedButtonReplyMsgs;
         delete res.unsyncedButtonReplies;
@@ -813,7 +813,7 @@ exports.LoadUtils = () => {
             throw err;
         }
     };
-    
+
     window.WWebJS.getProfilePicThumbToBase64 = async (chatWid) => {
         const profilePicCollection = await window.Store.ProfilePicThumb.find(chatWid);
 
@@ -941,7 +941,7 @@ exports.LoadUtils = () => {
         }));
 
         const groupJid = window.Store.WidToJid.widToGroupJid(groupWid);
-        
+
         const _getSleepTime = (sleep) => {
             if (!Array.isArray(sleep) || (sleep.length === 2 && sleep[0] === sleep[1])) {
                 return sleep;
@@ -1014,7 +1014,7 @@ exports.LoadUtils = () => {
         const response = await window.Store.pinUnpinMsg(message, action, duration);
         return response.messageSendResult === 'OK';
     };
-    
+
     window.WWebJS.getStatusModel = status => {
         let res = status.serialize();
         delete res._msgs;
