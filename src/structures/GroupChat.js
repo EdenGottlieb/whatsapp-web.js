@@ -28,7 +28,7 @@ class GroupChat extends Chat {
     get owner() {
         return this.groupMetadata.owner;
     }
-    
+
     /**
      * Gets the date at which the group was created
      * @type {date}
@@ -37,7 +37,7 @@ class GroupChat extends Chat {
         return new Date(this.groupMetadata.creation * 1000);
     }
 
-    /** 
+    /**
      * Gets the group description
      * @type {string}
      */
@@ -71,7 +71,7 @@ class GroupChat extends Chat {
 
     /**
      * Adds a list of participants by ID to the group
-     * @param {string|Array<string>} participantIds 
+     * @param {string|Array<string>} participantIds
      * @param {AddParticipnatsOptions} options An object thay handles options for adding participants
      * @returns {Promise<Object.<string, AddParticipantsResult>|string>} Returns an object with the resulting data or an error message as a string
      */
@@ -98,7 +98,11 @@ class GroupChat extends Chat {
                 419: 'The participant can\'t be added because the group is full'
             };
 
-            await window.Store.GroupQueryAndUpdate(groupWid);
+            try {
+                await window.Store.GroupQueryAndUpdate(groupWid);
+            } catch (e) {
+                await window.Store.GroupQueryAndUpdate({id: groupWid});
+            }
             const groupMetadata = group.groupMetadata;
             const groupParticipants = groupMetadata?.participants;
 
@@ -186,7 +190,7 @@ class GroupChat extends Chat {
 
     /**
      * Removes a list of participants by ID to the group
-     * @param {Array<string>} participantIds 
+     * @param {Array<string>} participantIds
      * @returns {Promise<{ status: number }>}
      */
     async removeParticipants(participantIds) {
@@ -203,7 +207,7 @@ class GroupChat extends Chat {
 
     /**
      * Promotes participants by IDs to admins
-     * @param {Array<string>} participantIds 
+     * @param {Array<string>} participantIds
      * @returns {Promise<{ status: number }>} Object with status code indicating if the operation was successful
      */
     async promoteParticipants(participantIds) {
@@ -220,7 +224,7 @@ class GroupChat extends Chat {
 
     /**
      * Demotes participants by IDs to regular users
-     * @param {Array<string>} participantIds 
+     * @param {Array<string>} participantIds
      * @returns {Promise<{ status: number }>} Object with status code indicating if the operation was successful
      */
     async demoteParticipants(participantIds) {
@@ -237,7 +241,7 @@ class GroupChat extends Chat {
 
     /**
      * Updates the group subject
-     * @param {string} subject 
+     * @param {string} subject
      * @returns {Promise<boolean>} Returns true if the subject was properly updated. This can return false if the user does not have the necessary permissions.
      */
     async setSubject(subject) {
@@ -259,7 +263,7 @@ class GroupChat extends Chat {
 
     /**
      * Updates the group description
-     * @param {string} description 
+     * @param {string} description
      * @returns {Promise<boolean>} Returns true if the description was properly updated. This can return false if the user does not have the necessary permissions.
      */
     async setDescription(description) {
@@ -280,10 +284,10 @@ class GroupChat extends Chat {
         this.groupMetadata.desc = description;
         return true;
     }
-    
+
     /**
      * Updates the group setting to allow only admins to add members to the group.
-     * @param {boolean} [adminsOnly=true] Enable or disable this option 
+     * @param {boolean} [adminsOnly=true] Enable or disable this option
      * @returns {Promise<boolean>} Returns true if the setting was properly updated. This can return false if the user does not have the necessary permissions.
      */
     async setAddMembersAdminsOnly(adminsOnly=true) {
@@ -301,10 +305,10 @@ class GroupChat extends Chat {
         success && (this.groupMetadata.memberAddMode = adminsOnly ? 'admin_add' : 'all_member_add');
         return success;
     }
-    
+
     /**
      * Updates the group settings to only allow admins to send messages.
-     * @param {boolean} [adminsOnly=true] Enable or disable this option 
+     * @param {boolean} [adminsOnly=true] Enable or disable this option
      * @returns {Promise<boolean>} Returns true if the setting was properly updated. This can return false if the user does not have the necessary permissions.
      */
     async setMessagesAdminsOnly(adminsOnly=true) {
@@ -327,7 +331,7 @@ class GroupChat extends Chat {
 
     /**
      * Updates the group settings to only allow admins to edit group info (title, description, photo).
-     * @param {boolean} [adminsOnly=true] Enable or disable this option 
+     * @param {boolean} [adminsOnly=true] Enable or disable this option
      * @returns {Promise<boolean>} Returns true if the setting was properly updated. This can return false if the user does not have the necessary permissions.
      */
     async setInfoAdminsOnly(adminsOnly=true) {
@@ -343,7 +347,7 @@ class GroupChat extends Chat {
         }, this.id._serialized, adminsOnly);
 
         if(!success) return false;
-        
+
         this.groupMetadata.restrict = adminsOnly;
         return true;
     }
@@ -395,7 +399,7 @@ class GroupChat extends Chat {
             ? codeRes?.code
             : codeRes;
     }
-    
+
     /**
      * Invalidates the current group invite code and generates a new one
      * @returns {Promise<string>} New invite code
@@ -408,7 +412,7 @@ class GroupChat extends Chat {
 
         return codeRes.code;
     }
-    
+
     /**
      * An object that handles the information about the group membership request
      * @typedef {Object} GroupMembershipRequest
@@ -418,7 +422,7 @@ class GroupChat extends Chat {
      * @property {string} requestMethod The method used to create the request: NonAdminAdd/InviteLink/LinkedGroupJoin
      * @property {number} t The timestamp the request was created at
      */
-    
+
     /**
      * Gets an array of membership requests
      * @returns {Promise<Array<GroupMembershipRequest>>} An array of membership requests
