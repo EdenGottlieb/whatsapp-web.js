@@ -458,7 +458,11 @@ exports.LoadUtils = () => {
         if (chat.groupMetadata) {
             res.isGroup = true;
             const chatWid = window.Store.WidFactory.createWid((chat.id._serialized));
-            await window.Store.GroupMetadata.update({id: chatWid});
+            try {
+                await window.Store.GroupMetadata.update({id: chatWid});
+            } catch (e) {
+                await window.Store.GroupMetadata.update(chatWid);
+            }
             res.groupMetadata = chat.groupMetadata.serialize();
         }
 
