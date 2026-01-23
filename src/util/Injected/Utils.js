@@ -11,13 +11,36 @@ exports.LoadUtils = () => {
 
     window.WWebJS.sendSeen = async (chatId) => {
         const chat = await window.WWebJS.getChat(chatId, { getAsModel: false });
-        if (chat) {
-            window.Store.WAWebStreamModel.Stream.markAvailable();
-            await window.Store.SendSeen.markSeen(chat);
-            window.Store.WAWebStreamModel.Stream.markUnavailable();
-            return true;
+        if (!chat) return false;
+
+        if (window.Store.ChatGetters?.getIsNewsletter?.(chat) ||
+            window.Store.ChatGetters?.getIsBroadcast?.(chat)) {
+            return false;
         }
-        return false;
+
+        try {
+            window.Store.WAWebStreamModel.Stream.markAvailable();
+
+            try {
+                if (window.Store.SendSeen?.sendSeen) {
+                    await window.Store.SendSeen.sendSeen({ chat, threadId: undefined });
+                    return true;
+                }
+            } catch {
+                // ignore
+            }
+
+            if (window.Store.SendSeen?.markSeen) {
+                await window.Store.SendSeen.markSeen(chat);
+                return true;
+            }
+
+            return false;
+        } catch {
+            return false;
+        } finally {
+            window.Store.WAWebStreamModel.Stream.markUnavailable();
+        }
     };
 
     window.WWebJS.sendMessage = async (chat, content, options = {}) => {
