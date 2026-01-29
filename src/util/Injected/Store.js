@@ -207,6 +207,16 @@ exports.ExposeStore = () => {
         ...window.require('WAWebStatusGatingUtils')
     };
 
+    // Backward compatibility remaps for renamed collections (only if not already defined)
+    if (!window.Store.Call) window.Store.Call = window.Store.WAWebCallCollection;
+    if (!window.Store.ChatPreference) window.Store.ChatPreference = window.Store.WAWebChatPreferenceCollection;
+    if (!window.Store.ConversionTuple) window.Store.ConversionTuple = window.Store.WAWebConversionTupleCollection;
+    if (!window.Store.GroupMetadata) window.Store.GroupMetadata = window.Store.WAWebGroupMetadataCollection;
+    if (!window.Store.UnjoinedSubgroupMetadataCollection) window.Store.UnjoinedSubgroupMetadataCollection = window.Store.WAWebUnjoinedSubgroupMetadataCollection;
+    if (!window.Store.CommunityActivityCollection) window.Store.CommunityActivityCollection = window.Store.WAWebCommunityActivityCollection;
+    if (!window.Store.NewsletterCollection) window.Store.NewsletterCollection = window.Store.WAWebNewsletterCollection;
+    if (!window.Store.NewsletterMetadataCollection) window.Store.NewsletterMetadataCollection = window.Store.WAWebNewsletterMetadataCollection;
+
     if (!window.Store.Chat._find || !window.Store.Chat.findImpl) {
         window.Store.Chat._find = e => {
             const target = window.Store.Chat.get(e);
@@ -231,7 +241,7 @@ exports.ExposeStore = () => {
     window.injectToFunction = (target, callback) => {
         try {
             let module = window.require(target.module);
-            if (!module) return; 
+            if (!module) return;
 
             const path = target.function.split('.');
             const funcName = path.pop();
