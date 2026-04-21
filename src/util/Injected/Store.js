@@ -120,7 +120,7 @@ exports.ExposeStore = () => {
         setPushname: window.require('WAWebSetPushnameConnAction').setPushname
     };
     window.Store.NumberInfo = {
-        ...window.require('WAPhoneUtils'),
+        ...window.require('WAWebPhoneUtils'),
         ...window.require('WAPhoneFindCC')
     };
     window.Store.ForwardUtils = {
@@ -177,6 +177,7 @@ exports.ExposeStore = () => {
         ...window.require('WAWebNewsletterSubscribeAction'),
         ...window.require('WAWebNewsletterUnsubscribeAction'),
         ...window.require('WAWebNewsletterDirectorySearchAction'),
+        ...window.require('WAWebNewsletterToggleMuteStateJob'),
         ...window.require('WAWebNewsletterGatingUtils'),
         ...window.require('WAWebNewsletterModelUtils'),
         ...window.require('WAWebMexAcceptNewsletterAdminInviteJob'),
@@ -214,7 +215,7 @@ exports.ExposeStore = () => {
             const target = window.Store.Chat.get(e);
             return target ? Promise.resolve(target) : Promise.resolve({
                 id: e
-            });
+                  });
         };
         window.Store.Chat.findImpl = window.Store.Chat._find;
     }
@@ -233,7 +234,7 @@ exports.ExposeStore = () => {
     window.injectToFunction = (target, callback) => {
         try {
             let module = window.require(target.module);
-            if (!module) return; 
+            if (!module) return;
 
             const path = target.function.split('.');
             const funcName = path.pop();
