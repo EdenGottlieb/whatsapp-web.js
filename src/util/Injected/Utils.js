@@ -23,7 +23,8 @@ exports.LoadUtils = () => {
             await window.Store.SendSeen.sendSeen({
                 chat: chat,
                 threadId: undefined
-            });         
+            });
+        } finally {
             window.Store.WAWebStreamModel.Stream.markUnavailable();
         }
     };
