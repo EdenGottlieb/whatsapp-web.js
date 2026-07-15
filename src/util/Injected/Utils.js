@@ -3,6 +3,22 @@
 exports.LoadUtils = () => {
     window.WWebJS = {};
 
+    /**
+     * Serialized id of a MsgKey. Recent WhatsApp builds dropped `_serialized` from MsgKey and expose
+     * the value under a minified alias (`$1` at time of writing) instead; the custom `toString()` still
+     * returns it and survives re-minification, so it is preferred over reading the alias directly.
+     * Wid still carries `_serialized` — this is for MsgKey only.
+     */
+    window.WWebJS.getMsgKeyId = (msgKey) => {
+        if (!msgKey) return undefined;
+        if (typeof msgKey._serialized === 'string') return msgKey._serialized;
+        if (msgKey.toString !== Object.prototype.toString) {
+            const serialized = msgKey.toString();
+            if (typeof serialized === 'string' && serialized !== '[object Object]') return serialized;
+        }
+        return typeof msgKey.$1 === 'string' ? msgKey.$1 : undefined;
+    };
+
     window.WWebJS.forwardMessage = async (chatId, msgId) => {
         const msg = window.Store.Msg.get(msgId) || (await window.Store.Msg.getMessagesById([msgId]))?.messages?.[0];
         const chat = await window.WWebJS.getChat(chatId, { getAsModel: false });
@@ -371,7 +387,7 @@ exports.LoadUtils = () => {
 
         if (options.waitUntilMsgSent) await sendMsgResultPromise;
 
-        return window.Store.Msg.get(newMsgKey._serialized);
+        return window.Store.Msg.get(window.WWebJS.getMsgKeyId(newMsgKey));
     };
 
     window.WWebJS.editMessage = async (msg, content, options = {}) => {
@@ -408,7 +424,7 @@ exports.LoadUtils = () => {
         };
 
         await window.Store.EditMessage.sendMessageEdit(msg, content, internalOptions);
-        return window.Store.Msg.get(msg.id._serialized);
+        return window.Store.Msg.get(window.WWebJS.getMsgKeyId(msg.id));
     };
 
     window.WWebJS.toStickerData = async (mediaInfo) => {
@@ -566,6 +582,12 @@ exports.LoadUtils = () => {
             msg.id = Object.assign({}, msg.id, { remote: msg.id.remote._serialized });
         }
 
+        // Consumers treat `id._serialized` as the message's primary key; keep emitting it even on
+        // builds where MsgKey no longer exposes the property itself.
+        if (typeof msg.id._serialized !== 'string') {
+            msg.id = Object.assign({}, msg.id, { _serialized: window.WWebJS.getMsgKeyId(message.id) });
+        }
+
         delete msg.pendingAckUpdate;
 
         return msg;
@@ -669,13 +691,10 @@ exports.LoadUtils = () => {
 
         model.lastMessage = null;
         if (model.msgs && model.msgs.length) {
-            // Recent WhatsApp builds no longer expose `_serialized` on MsgKey, so the id can resolve to
-            // undefined and Store.Msg.getMessagesById([undefined]) then throws an IndexedDB DataError.
-            // lastMessage is optional metadata and must never take the whole chat model down with it.
-            const msgKey = chat.lastReceivedKey;
-            const msgId = typeof msgKey?._serialized === 'string'
-                ? msgKey._serialized
-                : msgKey?.toString !== Object.prototype.toString ? msgKey?.toString() : undefined;
+            // Resolving the id can still come back undefined, and Store.Msg.getMessagesById([undefined])
+            // then throws an IndexedDB DataError. lastMessage is optional metadata and must never take
+            // the whole chat model down with it.
+            const msgId = window.WWebJS.getMsgKeyId(chat.lastReceivedKey);
 
             let lastMessage = null;
             if (msgId) {
