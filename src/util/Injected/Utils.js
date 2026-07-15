@@ -669,9 +669,24 @@ exports.LoadUtils = () => {
 
         model.lastMessage = null;
         if (model.msgs && model.msgs.length) {
-            const lastMessage = chat.lastReceivedKey
-                ? window.Store.Msg.get(chat.lastReceivedKey._serialized) || (await window.Store.Msg.getMessagesById([chat.lastReceivedKey._serialized]))?.messages?.[0]
-                : null;
+            // Recent WhatsApp builds no longer expose `_serialized` on MsgKey, so the id can resolve to
+            // undefined and Store.Msg.getMessagesById([undefined]) then throws an IndexedDB DataError.
+            // lastMessage is optional metadata and must never take the whole chat model down with it.
+            const msgKey = chat.lastReceivedKey;
+            const msgId = typeof msgKey?._serialized === 'string'
+                ? msgKey._serialized
+                : msgKey?.toString !== Object.prototype.toString ? msgKey?.toString() : undefined;
+
+            let lastMessage = null;
+            if (msgId) {
+                try {
+                    lastMessage = window.Store.Msg.get(msgId)
+                        || (await window.Store.Msg.getMessagesById([msgId]))?.messages?.[0]
+                        || null;
+                } catch {
+                    lastMessage = null;
+                }
+            }
             lastMessage && (model.lastMessage = window.WWebJS.getMessageModel(lastMessage));
         }
 
