@@ -19,6 +19,16 @@ const { ClientInfo, Message, MessageMedia, Contact, Location, Poll, PollVote, Gr
 const NoAuth = require('./authStrategies/NoAuth');
 const {exposeFunctionIfAbsent} = require('./util/Puppeteer');
 
+const isBrowserConnected = browser => {
+    if (!browser) {
+        return false;
+    }
+
+    return typeof browser.isConnected === 'function'
+        ? browser.isConnected()
+        : browser.connected;
+};
+
 /**
  * Starting point for interacting with the WhatsApp Web API
  * @extends {EventEmitter}
@@ -890,8 +900,7 @@ class Client extends EventEmitter {
      */
     async destroy() {
         const browser = this.pupBrowser;
-        const isConnected = browser?.isConnected?.();
-        if (isConnected) {
+        if (isBrowserConnected(browser)) {
             await browser.close();
         }
         await this.authStrategy.destroy();
@@ -909,7 +918,7 @@ class Client extends EventEmitter {
         await this.pupBrowser.close();
         
         let maxDelay = 0;
-        while (this.pupBrowser.isConnected() && (maxDelay < 10)) { // waits a maximum of 1 second before calling the AuthStrategy
+        while (isBrowserConnected(this.pupBrowser) && (maxDelay < 10)) { // waits a maximum of 1 second before calling the AuthStrategy
             await new Promise(resolve => setTimeout(resolve, 100));
             maxDelay++; 
         }
