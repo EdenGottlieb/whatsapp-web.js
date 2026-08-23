@@ -131,88 +131,7 @@ class Client extends EventEmitter {
             await this.pupPage.evaluate(ExposeLegacyAuthStore, moduleRaid.toString());
         }
 
-        const needAuthentication = await this.pupPage.evaluate(async () => {
-            let state = window.AuthStore.AppState.state;
 
-            if (state === 'OPENING' || state === 'UNLAUNCHED' || state === 'PAIRING') {
-                // wait till state changes
-                await new Promise(r => {
-                    window.AuthStore.AppState.on('change:state', function waitTillInit(_AppState, state) {
-                        if (state !== 'OPENING' && state !== 'UNLAUNCHED' && state !== 'PAIRING') {
-                            window.AuthStore.AppState.off('change:state', waitTillInit);
-                            r();
-                        } 
-                    });
-                }); 
-            }
-            state = window.AuthStore.AppState.state;
-            return state == 'UNPAIRED' || state == 'UNPAIRED_IDLE';
-        });
-
-        if (needAuthentication) {
-            const { failed, failureEventPayload, restart } = await this.authStrategy.onAuthenticationNeeded();
-
-            if(failed) {
-                /**
-                 * Emitted when there has been an error while trying to restore an existing session
-                 * @event Client#auth_failure
-                 * @param {string} message
-                 */
-                this.emit(Events.AUTHENTICATION_FAILURE, failureEventPayload);
-                await this.destroy();
-                if (restart) {
-                    // session restore failed so try again but without session to force new authentication
-                    return this.initialize();
-                }
-                return;
-            }
-
-            // Register qr/code events
-            if (pairWithPhoneNumber.phoneNumber) {
-                await exposeFunctionIfAbsent(this.pupPage, 'onCodeReceivedEvent', async (code) => {
-                    /**
-                    * Emitted when a pairing code is received
-                    * @event Client#code
-                    * @param {string} code Code
-                    * @returns {string} Code that was just received
-                    */
-                    this.emit(Events.CODE_RECEIVED, code);
-                    return code;
-                });
-                this.requestPairingCode(pairWithPhoneNumber.phoneNumber, pairWithPhoneNumber.showNotification, pairWithPhoneNumber.intervalMs);
-            } else {
-                let qrRetries = 0;
-                await exposeFunctionIfAbsent(this.pupPage, 'onQRChangedEvent', async (qr) => {
-                    /**
-                    * Emitted when a QR code is received
-                    * @event Client#qr
-                    * @param {string} qr QR Code
-                    */
-                    this.emit(Events.QR_RECEIVED, qr);
-                    if (this.options.qrMaxRetries > 0) {
-                        qrRetries++;
-                        if (qrRetries > this.options.qrMaxRetries) {
-                            this.emit(Events.DISCONNECTED, 'Max qrcode retries reached');
-                            await this.destroy();
-                        }
-                    }
-                });
-
-
-                await this.pupPage.evaluate(async () => {
-                    const registrationInfo = await window.AuthStore.RegistrationUtils.waSignalStore.getRegistrationInfo();
-                    const noiseKeyPair = await window.AuthStore.RegistrationUtils.waNoiseInfo.get();
-                    const staticKeyB64 = window.AuthStore.Base64Tools.encodeB64(noiseKeyPair.staticKeyPair.pubKey);
-                    const identityKeyB64 = window.AuthStore.Base64Tools.encodeB64(registrationInfo.identityKeyPair.pubKey);
-                    const advSecretKey = await window.AuthStore.RegistrationUtils.getADVSecretKey();
-                    const platform = window.AuthStore.RegistrationUtils.DEVICE_PLATFORM;
-                    const getQR = (ref) => ref + ',' + staticKeyB64 + ',' + identityKeyB64 + ',' + advSecretKey + ',' + platform;
-
-                    window.onQRChangedEvent(getQR(window.AuthStore.Conn.ref)); // initial qr
-                    window.AuthStore.Conn.on('change:ref', (_, ref) => { window.onQRChangedEvent(getQR(ref)); }); // future QR changes
-                });
-            }
-        }
 
         await exposeFunctionIfAbsent(this.pupPage, 'onAuthAppStateChangedEvent', async (state) => {
             if (state == 'UNPAIRED_IDLE' && !pairWithPhoneNumber.phoneNumber) {
@@ -317,6 +236,89 @@ class Client extends EventEmitter {
                 await window.onLogoutEvent();
             });
         });
+
+        const needAuthentication = await this.pupPage.evaluate(async () => {
+            let state = window.AuthStore.AppState.state;
+
+            if (state === 'OPENING' || state === 'UNLAUNCHED' || state === 'PAIRING') {
+                // wait till state changes
+                await new Promise(r => {
+                    window.AuthStore.AppState.on('change:state', function waitTillInit(_AppState, state) {
+                        if (state !== 'OPENING' && state !== 'UNLAUNCHED' && state !== 'PAIRING') {
+                            window.AuthStore.AppState.off('change:state', waitTillInit);
+                            r();
+                        } 
+                    });
+                }); 
+            }
+            state = window.AuthStore.AppState.state;
+            return state == 'UNPAIRED' || state == 'UNPAIRED_IDLE';
+        });
+
+        if (needAuthentication) {
+            const { failed, failureEventPayload, restart } = await this.authStrategy.onAuthenticationNeeded();
+
+            if(failed) {
+                /**
+                 * Emitted when there has been an error while trying to restore an existing session
+                 * @event Client#auth_failure
+                 * @param {string} message
+                 */
+                this.emit(Events.AUTHENTICATION_FAILURE, failureEventPayload);
+                await this.destroy();
+                if (restart) {
+                    // session restore failed so try again but without session to force new authentication
+                    return this.initialize();
+                }
+                return;
+            }
+
+            // Register qr/code events
+            if (pairWithPhoneNumber.phoneNumber) {
+                await exposeFunctionIfAbsent(this.pupPage, 'onCodeReceivedEvent', async (code) => {
+                    /**
+                    * Emitted when a pairing code is received
+                    * @event Client#code
+                    * @param {string} code Code
+                    * @returns {string} Code that was just received
+                    */
+                    this.emit(Events.CODE_RECEIVED, code);
+                    return code;
+                });
+                this.requestPairingCode(pairWithPhoneNumber.phoneNumber, pairWithPhoneNumber.showNotification, pairWithPhoneNumber.intervalMs);
+            } else {
+                let qrRetries = 0;
+                await exposeFunctionIfAbsent(this.pupPage, 'onQRChangedEvent', async (qr) => {
+                    /**
+                    * Emitted when a QR code is received
+                    * @event Client#qr
+                    * @param {string} qr QR Code
+                    */
+                    this.emit(Events.QR_RECEIVED, qr);
+                    if (this.options.qrMaxRetries > 0) {
+                        qrRetries++;
+                        if (qrRetries > this.options.qrMaxRetries) {
+                            this.emit(Events.DISCONNECTED, 'Max qrcode retries reached');
+                            await this.destroy();
+                        }
+                    }
+                });
+
+
+                await this.pupPage.evaluate(async () => {
+                    const registrationInfo = await window.AuthStore.RegistrationUtils.waSignalStore.getRegistrationInfo();
+                    const noiseKeyPair = await window.AuthStore.RegistrationUtils.waNoiseInfo.get();
+                    const staticKeyB64 = window.AuthStore.Base64Tools.encodeB64(noiseKeyPair.staticKeyPair.pubKey);
+                    const identityKeyB64 = window.AuthStore.Base64Tools.encodeB64(registrationInfo.identityKeyPair.pubKey);
+                    const advSecretKey = await window.AuthStore.RegistrationUtils.getADVSecretKey();
+                    const platform = window.AuthStore.RegistrationUtils.DEVICE_PLATFORM;
+                    const getQR = (ref) => ref + ',' + staticKeyB64 + ',' + identityKeyB64 + ',' + advSecretKey + ',' + platform;
+
+                    window.onQRChangedEvent(getQR(window.AuthStore.Conn.ref)); // initial qr
+                    window.AuthStore.Conn.on('change:ref', (_, ref) => { window.onQRChangedEvent(getQR(ref)); }); // future QR changes
+                });
+            }
+        }
     }
 
     /**
@@ -403,7 +405,6 @@ class Client extends EventEmitter {
                 await this.authStrategy.afterBrowserInitialized();
                 this.lastLoggedOut = false;
             }
-            await this.inject();
         });
     }
 
