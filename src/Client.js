@@ -12,6 +12,7 @@ const { ExposeStore } = require('./util/Injected/Store');
 const { ExposeLegacyAuthStore } = require('./util/Injected/AuthStore/LegacyAuthStore');
 const { ExposeLegacyStore } = require('./util/Injected/LegacyStore');
 const { LoadUtils } = require('./util/Injected/Utils');
+const { LoadSafeRequire } = require('./util/Injected/SafeRequire');
 const ChatFactory = require('./factories/ChatFactory');
 const ContactFactory = require('./factories/ContactFactory');
 const WebCacheFactory = require('./webCache/WebCacheFactory');
@@ -106,6 +107,7 @@ class Client extends EventEmitter {
      * Private function
      */
     async inject() {
+        await this.pupPage.evaluate(LoadSafeRequire);
         if(this.options.authTimeoutMs === undefined || this.options.authTimeoutMs==0){
             this.options.authTimeoutMs = 30000;
         }
@@ -164,13 +166,13 @@ class Client extends EventEmitter {
                     await this.pupPage.evaluate(async () => {
                         const targetABFlag = 'wa_web_disable_prefetch_loadables';
 
-                        const ABPrefetchLoadablesExists = !!(await window.require('WAWebABPropsConfigs').ABPropConfigs[targetABFlag]);
+                        const ABPrefetchLoadablesExists = !!(await window.safeRequire('WAWebABPropsConfigs').ABPropConfigs[targetABFlag]);
                       
                         if (ABPrefetchLoadablesExists) {
-                            const isUsingABPrefetchLoadables = await window.require('WAWebABProps').getABPropConfigValue(targetABFlag);
+                            const isUsingABPrefetchLoadables = await window.safeRequire('WAWebABProps').getABPropConfigValue(targetABFlag);
 
                             if (isUsingABPrefetchLoadables) {
-                                await window.require('WAWebPrefetchLoadables')();
+                                await window.safeRequire('WAWebPrefetchLoadables')();
                             }
                         }
                     });
@@ -939,8 +941,8 @@ class Client extends EventEmitter {
 
     async setDeviceName(deviceName, browserName) {
         (deviceName || browserName) && await this.pupPage.evaluate((deviceName, browserName) => {
-            const func = window.require('WAWebMiscBrowserUtils').info;
-            window.require('WAWebMiscBrowserUtils').info = () => {
+            const func = window.safeRequire('WAWebMiscBrowserUtils').info;
+            window.safeRequire('WAWebMiscBrowserUtils').info = () => {
                 return {
                     ...func(),
                     ...(deviceName ? { os: deviceName } : {}),

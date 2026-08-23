@@ -2,16 +2,16 @@
 
 exports.ExposeAuthStore = () => {
     window.AuthStore = {};
-    window.AuthStore.AppState = window.require('WAWebSocketModel').Socket;
-    window.AuthStore.Cmd = window.require('WAWebCmd').Cmd;
-    window.AuthStore.Conn = window.require('WAWebConnModel').Conn;
-    window.AuthStore.OfflineMessageHandler = window.require('WAWebOfflineHandler').OfflineMessageHandler;
-    window.AuthStore.PairingCodeLinkUtils = window.require('WAWebAltDeviceLinkingApi');
-    window.AuthStore.Base64Tools = window.require('WABase64');
+    window.AuthStore.AppState = window.safeRequire('WAWebSocketModel').Socket;
+    window.AuthStore.Cmd = window.safeRequire('WAWebCmd').Cmd;
+    window.AuthStore.Conn = window.safeRequire('WAWebConnModel').Conn;
+    window.AuthStore.OfflineMessageHandler = window.safeRequire('WAWebOfflineHandler').OfflineMessageHandler;
+    window.AuthStore.PairingCodeLinkUtils = window.safeRequire('WAWebAltDeviceLinkingApi');
+    window.AuthStore.Base64Tools = window.safeRequire('WABase64');
     window.AuthStore.RegistrationUtils = {
-        ...window.require('WAWebCompanionRegClientUtils'),
-        ...window.require('WAWebAdvSignatureApi'),
-        ...window.require('WAWebUserPrefsInfoStore'),
-        ...window.require('WAWebSignalStoreApi'),
+        ...window.safeRequire('WAWebCompanionRegClientUtils'),
+        ...window.safeRequire('WAWebAdvSignatureApi'),
+        ...window.safeRequire('WAWebUserPrefsInfoStore'),
+        ...window.safeRequire('WAWebSignalStoreApi'),
     };
 };
