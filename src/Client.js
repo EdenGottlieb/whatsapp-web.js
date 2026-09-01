@@ -828,11 +828,15 @@ class Client extends EventEmitter {
                         const timestamp = vote.t / 1000;
                         const sender = vote.author ?? vote.from;
                         const senderUserJid = sender._serialized;
+                        const parentMsgKeyId = window.WWebJS.getMsgKeyId(parentMsgKey);
 
-                        let parentMessage = window.Store.Msg.get(parentMsgKey._serialized);
-                        if (!parentMessage) {
-                            const fetched = await window.Store.Msg.getMessagesById([parentMsgKey._serialized]);
-                            parentMessage = fetched?.messages?.[0] || null;
+                        let parentMessage = null;
+                        if (parentMsgKeyId) {
+                            parentMessage = window.Store.Msg.get(parentMsgKeyId);
+                            if (!parentMessage) {
+                                const fetched = await window.Store.Msg.getMessagesById([parentMsgKeyId]);
+                                parentMessage = fetched?.messages?.[0] || null;
+                            }
                         }
 
                         return {
@@ -842,7 +846,7 @@ class Client extends EventEmitter {
                             parentMsgKey,
                             senderUserJid,
                             timestamp,
-                            parentMessage
+                            parentMessage: parentMessage ? window.WWebJS.getMessageModel(parentMessage) : null
                         };
                     }));
 
