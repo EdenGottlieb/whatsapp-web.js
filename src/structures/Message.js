@@ -479,6 +479,10 @@ class Message extends Base {
                     mediaKey: msg.mediaKey,
                     mediaKeyTimestamp: msg.mediaKeyTimestamp,
                     type: msg.type,
+                    // Required: when omitted, DownloadManager defaults mimetype to 'application/octet-stream'.
+                    // With the server-side `web_use_kaleidoscope_media_check_enabled` AB prop enabled, that default
+                    // fails the mimetype/media-type consistency check with InvalidMediaFileType.
+                    mimetype: msg.mimetype ?? msg.mediaData?.mimetype,
                     signal: (new AbortController).signal,
                     downloadQpl: mockQpl
                 });
