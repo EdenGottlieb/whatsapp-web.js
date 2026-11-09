@@ -18,7 +18,7 @@ const ContactFactory = require('./factories/ContactFactory');
 const WebCacheFactory = require('./webCache/WebCacheFactory');
 const { ClientInfo, Message, MessageMedia, Contact, Location, Poll, PollVote, GroupNotification, Label, Call, Buttons, List, Reaction, Broadcast, ScheduledEvent } = require('./structures');
 const NoAuth = require('./authStrategies/NoAuth');
-const {exposeFunctionIfAbsent} = require('./util/Puppeteer');
+const {exposeFunctionIfAbsent, isNavigationError} = require('./util/Puppeteer');
 
 const isBrowserConnected = browser => {
     if (!browser) {
@@ -99,6 +99,8 @@ class Client extends EventEmitter {
 
         this.currentIndexHtml = null;
         this.lastLoggedOut = false;
+        this.isLoginPage = false;
+        this.injectQueue = Promise.resolve();
 
         Util.setFfmpegPath(this.options.ffmpegPath);
     }
@@ -107,6 +109,8 @@ class Client extends EventEmitter {
      * Private function
      */
     async inject() {
+        // Set before anything can throw, so a navigation away from the login page is recognized as such
+        this.isLoginPage = new URL(this.pupPage.url()).pathname.startsWith('/login');
         await this.pupPage.evaluate(LoadSafeRequire);
         if(this.options.authTimeoutMs === undefined || this.options.authTimeoutMs==0){
             this.options.authTimeoutMs = 30000;
@@ -115,7 +119,8 @@ class Client extends EventEmitter {
         let timeout = this.options.authTimeoutMs;
         let res = false;
         while(start > (Date.now() - timeout)){
-            res = await this.pupPage.evaluate('window.Debug?.VERSION != undefined');
+            // A navigation can destroy the execution context mid-poll
+            res = await this.pupPage.evaluate('window.Debug?.VERSION != undefined').catch(() => false);
             if(res){break;}
             await new Promise(r => setTimeout(r, 200));
         }
@@ -133,14 +138,6 @@ class Client extends EventEmitter {
             await this.pupPage.evaluate(ExposeLegacyAuthStore, moduleRaid.toString());
         }
 
-
-
-        await exposeFunctionIfAbsent(this.pupPage, 'onAuthAppStateChangedEvent', async (state) => {
-            if (state == 'UNPAIRED_IDLE' && !pairWithPhoneNumber.phoneNumber) {
-                // refresh qr code
-                window.Store.Cmd.refreshQR();
-            }
-        });
 
         await exposeFunctionIfAbsent(this.pupPage, 'onAppStateHasSyncedEvent', async () => {
             const authEventPayload = await this.authStrategy.getAuthEventPayload();
@@ -228,8 +225,8 @@ class Client extends EventEmitter {
             this.lastLoggedOut = true;
             await this.pupPage.waitForNavigation({waitUntil: 'load', timeout: 5000}).catch((_) => _);
         });
-        await this.pupPage.evaluate(() => {
-            window.AuthStore.AppState.on('change:state', (_AppState, state) => { window.onAuthAppStateChangedEvent(state); });
+        // The login page has no AppState; WA navigates to the main app after pairing and we inject again there
+        !this.isLoginPage && await this.pupPage.evaluate(() => {
             window.AuthStore.AppState.on('change:hasSynced', () => { window.onAppStateHasSyncedEvent(); });
             window.AuthStore.Cmd.on('offline_progress_update', () => {
                 window.onOfflineProgressUpdateEvent(window.AuthStore.OfflineMessageHandler.getOfflineDeliveryProgress()); 
@@ -240,6 +237,15 @@ class Client extends EventEmitter {
         });
 
         const needAuthentication = await this.pupPage.evaluate(async () => {
+            if (window.AuthStore.isLoginPage) {
+                // Conn.ref only holds a usable QR ref once the socket is unpaired
+                const isUnpaired = () => ['UNPAIRED', 'UNPAIRED_IDLE'].includes(window.AuthStore.BackendEventBus.socketState);
+                while (!isUnpaired()) {
+                    await new Promise(r => setTimeout(r, 100));
+                }
+                return true;
+            }
+
             let state = window.AuthStore.AppState.state;
 
             if (state === 'OPENING' || state === 'UNLAUNCHED' || state === 'PAIRING') {
@@ -318,6 +324,19 @@ class Client extends EventEmitter {
 
                     window.onQRChangedEvent(getQR(window.AuthStore.Conn.ref)); // initial qr
                     window.AuthStore.Conn.on('change:ref', (_, ref) => { window.onQRChangedEvent(getQR(ref)); }); // future QR changes
+
+                    // Once the refs run out WA goes UNPAIRED_IDLE and waits for a "reload QR" click.
+                    // Both the main app and the login page drive socket state and QR refresh through this bus.
+                    const bus = window.AuthStore.BackendEventBus;
+                    if (bus) {
+                        const refreshIfIdle = (state) => {
+                            if (state === 'UNPAIRED_IDLE') {
+                                bus.triggerRefreshQR();
+                            }
+                        };
+                        bus.onSetSocketState(refreshIfIdle);
+                        refreshIfIdle(bus.socketState);
+                    }
                 });
             }
         }
@@ -397,7 +416,8 @@ class Client extends EventEmitter {
             referer: 'https://whatsapp.com/'
         });
 
-        await this.inject();
+        const initialInjection = this.inject();
+        this.injectQueue = initialInjection.catch(() => {});
 
         this.pupPage.on('framenavigated', async (frame) => {
             if(frame.url().includes('post_logout=1') || this.lastLoggedOut) {
@@ -406,7 +426,45 @@ class Client extends EventEmitter {
                 await this.authStrategy.beforeBrowserInitialized();
                 await this.authStrategy.afterBrowserInitialized();
                 this.lastLoggedOut = false;
+                return;
             }
+            if (frame === this.pupPage.mainFrame()) {
+                this.reinjectOnLoginPageTransition(frame.url());
+            }
+        });
+
+        // WA leaves the login page by itself (after pairing, or when the browser is already registered),
+        // which kills whatever the initial injection was awaiting; the re-injection takes over from there.
+        await initialInjection.catch((err) => {
+            if (!this.isLoginPage || !isNavigationError(err)) {
+                throw err;
+            }
+        });
+    }
+
+    /**
+     * Injects again when a new document replaces the login page or brings it up, as each document needs its own injection.
+     * Same-document navigations and main app reloads are left alone, as before.
+     * @param {string} url - The URL the main frame navigated to
+     * Private function
+     */
+    reinjectOnLoginPageTransition(url) {
+        const toLoginPage = new URL(url).pathname.startsWith('/login');
+        this.injectQueue = this.injectQueue.then(async () => {
+            if (!this.isLoginPage && !toLoginPage) {
+                return;
+            }
+            // safeRequire is the first thing inject() sets, so only a fresh document lacks it
+            const isNewDocument = await this.pupPage.evaluate(() => !window.safeRequire).catch(() => false);
+            if (!isNewDocument) {
+                return;
+            }
+            await this.inject();
+        }).catch((err) => {
+            if (isNavigationError(err)) {
+                return;
+            }
+            this.emit(Events.DISCONNECTED, `REINJECT_FAILED: ${err && err.message ? err.message : err}`);
         });
     }
 
@@ -431,7 +489,8 @@ class Client extends EventEmitter {
                 clearInterval(window.codeInterval); // remove existing interval
             }
             window.codeInterval = setInterval(async () => {
-                if (window.AuthStore.AppState.state != 'UNPAIRED' && window.AuthStore.AppState.state != 'UNPAIRED_IDLE') {
+                const state = window.AuthStore.AppState?.state ?? window.AuthStore.BackendEventBus.socketState;
+                if (state != 'UNPAIRED' && state != 'UNPAIRED_IDLE') {
                     clearInterval(window.codeInterval);
                     return;
                 }

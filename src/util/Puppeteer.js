@@ -64,4 +64,18 @@ function isTransientExposeError(err) {
     );
 }
 
-module.exports = {exposeFunctionIfAbsent};
+/**
+ * Whether an evaluate failure was caused by the page navigating away
+ * (its execution context going away) rather than by the evaluated code.
+ *
+ * @param {*} err
+ * @returns {boolean}
+ */
+function isNavigationError(err) {
+    const message = err && err.message ? err.message : String(err);
+    return /execution context was destroyed|cannot find context with specified id|inspected target navigated/i.test(
+        message,
+    );
+}
+
+module.exports = {exposeFunctionIfAbsent, isNavigationError};
